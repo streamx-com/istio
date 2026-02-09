@@ -1,0 +1,84 @@
+name: Release to GHCR
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to publish (defaults to the git tag)"
+        required: false
+        type: string
+      hub:
+        description: "GHCR hub/namespace (defaults to ghcr.io/${{ github.repository }})"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute HUB and TAG
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Default to repository-based GHCR namespace (owner/repo). This avoids
+          # assuming the repo name is "istio" when running on forks or renamed repos.
+          HUB_DEFAULT="ghcr.io/${GITHUB_REPOSITORY}"
+
+          # workflow_dispatch inputs (if present)
+          HUB_INPUT="${{ inputs.hub }}"
+          TAG_INPUT="${{ inputs.tag }}"
+
+          if [[ -n "${HUB_INPUT}" ]]; then
+            echo "hub=${HUB_INPUT}" >> "$GITHUB_OUTPUT"
+          else
+            echo "hub=${HUB_DEFAULT}" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [[ -n "${TAG_INPUT}" ]]; then
+            echo "tag=${TAG_INPUT}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push Istio images
+        env:
+          HUB: ${{ steps.vars.outputs.hub }}
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          set -euo pipefail
+          echo "HUB=$HUB"
+          echo "TAG=$TAG"
+
+          make docker
+          make docker.push
