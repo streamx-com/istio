@@ -11,7 +11,7 @@ on:
         required: false
         type: string
       hub:
-        description: "GHCR hub/namespace (defaults to ghcr.io/${{ github.repository }})"
+        description: "GHCR hub/namespace (defaults to ghcr.io/<owner>/<repo>)"
         required: false
         type: string
 
