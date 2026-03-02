@@ -15,6 +15,8 @@
 package features
 
 import (
+	"strings"
+
 	wrappers "google.golang.org/protobuf/types/known/wrapperspb"
 
 	"istio.io/istio/pkg/env"
@@ -127,6 +129,31 @@ var (
 			return nil
 		}
 		return &wrappers.UInt32Value{Value: v}
+	}()
+
+	// Parsed map representation of the `PILOT_NETWORK_GATEWAY_LABEL_FILTER` env var. Parsed once at init.
+	NetworkGatewayLabelFilter = func() map[string]string {
+		v := env.Register(
+			"PILOT_NETWORK_GATEWAY_LABEL_FILTER",
+			"",
+			"Comma-separated list of key=value pairs to filter network gateways by labels. Only gateways matching all specified labels will be selected.").Get()
+		if v == "" {
+			return nil
+		}
+		m := make(map[string]string)
+		for _, pair := range strings.Split(v, ",") {
+			p := strings.TrimSpace(pair)
+			if p == "" {
+				continue
+			}
+			kv := strings.SplitN(p, "=", 2)
+			if len(kv) != 2 {
+				log.Warnf("Invalid PILOT_NETWORK_GATEWAY_LABEL_FILTER entry: %s", p)
+				continue
+			}
+			m[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+		}
+		return m
 	}()
 )
 

@@ -34,13 +34,14 @@ func TestLocalK8sGatewayToNetworkGateways(t *testing.T) {
 	ipType := gatewayv1.IPAddressType
 	hostnameType := gatewayv1.HostnameAddressType
 	passthroughMode := gatewayv1.TLSModePassthrough
+	gatewayLabels := map[string]string{label.TopologyNetwork.Name: "nw2", "streamx.com/istio-gateway-type": "private"}
 
 	gateway := func(mutate func(gw *gatewayv1.Gateway)) *gatewayv1.Gateway {
 		gw := &gatewayv1.Gateway{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "eastwest",
 				Namespace: "istio-system",
-				Labels:    map[string]string{label.TopologyNetwork.Name: "nw2"},
+				Labels:    gatewayLabels,
 			},
 			Spec: gatewayv1.GatewaySpec{
 				GatewayClassName: constants.RemoteGatewayClassName,
@@ -77,7 +78,7 @@ func TestLocalK8sGatewayToNetworkGateways(t *testing.T) {
 		{
 			name:   "hbone listener sets HBONEPort only",
 			gw:     gateway(nil),
-			expect: []NetworkGateway{{NetworkGateway: base, Source: source}},
+			expect: []NetworkGateway{{NetworkGateway: base, Source: source, Labels: gatewayLabels}},
 		},
 		{
 			name: "hostname address",
@@ -91,6 +92,7 @@ func TestLocalK8sGatewayToNetworkGateways(t *testing.T) {
 					return g
 				}(),
 				Source: source,
+				Labels: gatewayLabels,
 			}},
 		},
 		{
@@ -102,7 +104,7 @@ func TestLocalK8sGatewayToNetworkGateways(t *testing.T) {
 					Port:     15009,
 				})
 			}),
-			expect: []NetworkGateway{{NetworkGateway: base, Source: source}},
+			expect: []NetworkGateway{{NetworkGateway: base, Source: source, Labels: gatewayLabels}},
 		},
 		{
 			name: "auto-passthrough listener is not a local gateway",

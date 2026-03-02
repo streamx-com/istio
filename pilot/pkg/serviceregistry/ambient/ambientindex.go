@@ -20,6 +20,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -841,6 +842,22 @@ func LookupNetworkGateway(
 	// index lookups iterate a map and callers take the first entry, so the order must be stable
 	slices.SortBy(res, NetworkGateway.ResourceName)
 	return res
+}
+
+func LookupNetworkGatewayWithLabelFilter(
+	ctx krt.HandlerContext,
+	id network.ID,
+	gatewaysByNetwork krt.Index[network.ID, NetworkGateway],
+	labelFilter map[string]string,
+) []NetworkGateway {
+	gateways := LookupNetworkGateway(ctx, id, gatewaysByNetwork)
+	if len(labelFilter) == 0 {
+		return gateways
+	}
+	selector := labels.SelectorFromSet(labelFilter)
+	return slices.FilterInPlace(gateways, func(gateway NetworkGateway) bool {
+		return selector.Matches(labels.Set(gateway.Labels))
+	})
 }
 
 func LookupAllNetworkGateway(

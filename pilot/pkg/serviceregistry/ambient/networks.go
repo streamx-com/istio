@@ -38,6 +38,7 @@ import (
 type NetworkGateway struct {
 	model.NetworkGateway
 	Source types.NamespacedName
+	Labels map[string]string
 }
 
 func (n NetworkGateway) ResourceName() string {
@@ -281,6 +282,7 @@ func remoteK8sGatewayToNetworkGateways(clusterID cluster.ID, gw *gatewayv1.Gatew
 				gateways = append(gateways, NetworkGateway{
 					NetworkGateway: networkGateway,
 					Source:         source,
+					Labels:         gw.GetLabels(),
 				})
 				break
 			}
@@ -324,6 +326,7 @@ func localK8sGatewayToNetworkGateways(clusterID cluster.ID, gw *gatewayv1.Gatewa
 				gateways = append(gateways, NetworkGateway{
 					NetworkGateway: networkGateway,
 					Source:         source,
+					Labels:         gw.GetLabels(),
 				})
 				break
 			}
