@@ -3033,3 +3033,42 @@ func generateService(name, namespace string, labels, annotations map[string]stri
 		},
 	}
 }
+
+func TestLookupNetworkGatewayWithLabelFilter(t *testing.T) {
+	// Create two gateways in the same network with different labels
+	gw1 := NetworkGateway{
+		NetworkGateway: model.NetworkGateway{
+			Network: network.ID("nw-test"),
+			Addr:    "1.2.3.4",
+		},
+		Labels: map[string]string{"env": "prod"},
+	}
+	gw2 := NetworkGateway{
+		NetworkGateway: model.NetworkGateway{
+			Network: network.ID("nw-test"),
+			Addr:    "1.2.3.5",
+		},
+		Labels: map[string]string{"env": "staging"},
+	}
+
+	// Static collection of gateways
+	coll := krt.NewStaticCollection(nil, []NetworkGateway{gw1, gw2})
+
+	// Index by network
+	idx := krt.NewIndex(coll, "network", func(o NetworkGateway) []network.ID { return []network.ID{o.Network} })
+
+	// Filter for env=prod should only return gw1
+	res := LookupNetworkGatewayWithLabelFilter(krt.TestingDummyContext{}, network.ID("nw-test"), coll, idx, map[string]string{"env": "prod"})
+	if got := len(res); got != 1 {
+		t.Fatalf("expected 1 gateway, got %d", got)
+	}
+	if res[0].Addr != "1.2.3.4" {
+		t.Fatalf("unexpected gateway addr: %v", res[0].Addr)
+	}
+
+	// Empty/nil label filter should return both gateways
+	res2 := LookupNetworkGatewayWithLabelFilter(krt.TestingDummyContext{}, network.ID("nw-test"), coll, idx, nil)
+	if got := len(res2); got != 2 {
+		t.Fatalf("expected 2 gateways with nil filter, got %d", got)
+	}
+}

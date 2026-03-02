@@ -873,6 +873,20 @@ func LookupNetworkGateway(
 	return krt.Fetch(ctx, networkGateways, krt.FilterIndex(gatewaysByNetwork, id))
 }
 
+func LookupNetworkGatewayWithLabelFilter(
+	ctx krt.HandlerContext,
+	id network.ID,
+	networkGateways krt.Collection[NetworkGateway],
+	gatewaysByNetwork krt.Index[network.ID, NetworkGateway],
+	labelFilter map[string]string,
+) []NetworkGateway {
+	filters := []krt.FetchOption{krt.FilterIndex(gatewaysByNetwork, id)}
+	if len(labelFilter) > 0 {
+		filters = append(filters, krt.FilterLabel(labelFilter))
+	}
+	return krt.Fetch(ctx, networkGateways, filters...)
+}
+
 func LookupAllNetworkGateway(
 	ctx krt.HandlerContext,
 	networkGateways krt.Collection[NetworkGateway],
