@@ -1,0 +1,51 @@
+name: Release patched Istio images
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Istio upstream tag (e.g. 1.29.0)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout upstream Istio tag
+        uses: actions/checkout@v4
+        with:
+          repository: istio/istio
+          ref: ${{ github.event.inputs.tag }}
+          fetch-depth: 0
+
+      - name: Add and fetch fork branch
+        run: |
+          git remote add fork https://github.com/${{ github.repository }}.git
+          git fetch fork feature/label-filtered-network-gateway
+
+      - name: Merge feature branch
+        run: |
+          git merge --no-edit fork/feature/label-filtered-network-gateway        
+
+      - name: Set HUB and TAG variables
+        id: vars
+        run: |
+          echo "hub=ghcr.io/${GITHUB_REPOSITORY}" >> $GITHUB_OUTPUT
+          echo "tag=${{ github.event.inputs.tag }}-streamx" >> $GITHUB_OUTPUT
+
+      - name: Build and push Istio images
+        env:
+          HUB: ${{ steps.vars.outputs.hub }}
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          set -euo pipefail
+          echo "HUB=$HUB"
+          echo "TAG=$TAG"
+
+          make docker
+          make docker.push
