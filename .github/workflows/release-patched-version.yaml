@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Istio upstream tag with a matching patches/<tag> branch"
+        description: "Stable Istio upstream tag (for example, 1.32.0)"
         required: true
 
 permissions:
@@ -25,16 +25,53 @@ jobs:
           ref: refs/tags/${{ inputs.tag }}
           fetch-depth: 0
 
-      - name: Apply the release-specific patch
+      - name: Apply the newest eligible StreamX patch
         run: |
           set -euo pipefail
-          git remote add fork "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
-          git fetch --no-tags fork "refs/heads/patches/$UPSTREAM_TAG"
-          if [[ "$(git rev-list --parents -n 1 FETCH_HEAD)" != "$(git rev-parse FETCH_HEAD) $(git rev-parse HEAD)" ]]; then
-            echo "patches/$UPSTREAM_TAG must contain a single patch on top of the upstream tag" >&2
+          stable_version='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          if [[ ! "$UPSTREAM_TAG" =~ $stable_version ]]; then
+            echo "Expected a stable upstream tag in X.Y.Z format" >&2
             exit 1
           fi
-          git merge --ff-only FETCH_HEAD
+
+          git remote add fork "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          patch_refs=$(git ls-remote --heads --sort=-version:refname fork 'refs/heads/patches/*')
+          patch_version=
+          while read -r _ candidate_ref; do
+            candidate=${candidate_ref#refs/heads/patches/}
+            [[ "$candidate" =~ $stable_version ]] || continue
+            if printf '%s\n%s\n' "$candidate" "$UPSTREAM_TAG" | sort -V -C; then
+              patch_version=$candidate
+              break
+            fi
+          done <<< "$patch_refs"
+          if [[ -z "$patch_version" ]]; then
+            echo "No patches/<version> branch found for $UPSTREAM_TAG or an earlier release" >&2
+            exit 1
+          fi
+
+          git fetch --no-tags fork "refs/heads/patches/$patch_version"
+          patch_commit=$(git rev-parse FETCH_HEAD)
+          patch_base=$(git rev-parse "refs/tags/${patch_version}^{commit}")
+          if [[ "$(git rev-list --parents -n 1 "$patch_commit")" != "$patch_commit $patch_base" ]]; then
+            echo "patches/$patch_version must contain a single patch on top of upstream $patch_version" >&2
+            exit 1
+          fi
+
+          echo "Applying patches/$patch_version ($patch_commit) to upstream $UPSTREAM_TAG"
+          if [[ "$patch_version" == "$UPSTREAM_TAG" ]]; then
+            git merge --ff-only "$patch_commit"
+          else
+            # Keep the resulting commit stable across retries of the same release.
+            GIT_COMMITTER_DATE=$(git show -s --format=%cI "$patch_commit")
+            export GIT_COMMITTER_DATE
+            if ! git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              cherry-pick -x "$patch_commit"; then
+              echo "Could not apply patches/$patch_version cleanly. Prepare patches/$UPSTREAM_TAG and retry." >&2
+              exit 1
+            fi
+          fi
 
       - name: Set up Go
         uses: actions/setup-go@v5
